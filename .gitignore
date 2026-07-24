@@ -1,0 +1,17 @@
+# 不需要上传的顶层文件夹
+CHD-xjt/
+MS-MINT/
+basic_study/
+beida-sjp/
+60w_data/
+output/
+
+# Python 缓存
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# IDE 和系统
+.vscode/
+.DS_Store
+Thumbs.db
