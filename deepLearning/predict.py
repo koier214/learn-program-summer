@@ -4,7 +4,7 @@ from models.linear_model import LinearModel
 
 
 def main():
-    # 初始化模型并加载权重
+    # 初始化模型并加载权重.
     model = LinearModel()
     save_path = os.path.join(os.path.dirname(__file__),
                              'checkpoints', 'linear_model.pth')
