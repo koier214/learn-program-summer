@@ -1,0 +1,1741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown 文档预览</title>
+<style>
+/* ===== CSS Variables ===== */
+:root {
+  --bg: #fdfcf9;
+  --surface: #ffffff;
+  --text: #2c2416;
+  --text-secondary: #5c5347;
+  --border: #e0d8c8;
+  --accent: #8b6914;
+  --accent-light: #f5ecd7;
+  --code-bg: #f4f0e6;
+  --table-stripe: #faf7f0;
+  --table-header: #f0e8d5;
+  --blockquote-border: #c9a84c;
+  --blockquote-bg: #fdf9f0;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 10px 40px rgba(0,0,0,0.08);
+  --radius: 8px;
+  --sidebar-width: 260px;
+  --content-max: 820px;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'SF Mono', 'Consolas', 'Courier New', monospace;
+}
+
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; font-size: 16px; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.75;
+  display: flex;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Sidebar TOC ===== */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 24px 0;
+  z-index: 10;
+  box-shadow: var(--shadow);
+  transition: transform 0.3s ease;
+}
+.sidebar-header {
+  padding: 0 20px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.sidebar nav { padding: 0 12px; }
+.sidebar nav a {
+  display: block;
+  padding: 5px 12px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.15s;
+  border-left: 2px solid transparent;
+  line-height: 1.5;
+  margin-bottom: 1px;
+}
+.sidebar nav a:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+.sidebar nav a.active {
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
+  border-left-color: var(--accent);
+}
+.sidebar nav a.h2 { padding-left: 12px; font-weight: 600; }
+.sidebar nav a.h3 { padding-left: 28px; font-size: 12.5px; }
+.sidebar nav a.h4 { padding-left: 44px; font-size: 12px; }
+
+/* ===== Main Area ===== */
+.main {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ===== Toolbar ===== */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(253,252,249,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.toolbar-title {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toolbar-title strong { color: var(--text); }
+.toolbar-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--surface);
+  color: var(--text);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--accent-light); border-color: var(--accent); }
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn-primary:hover { opacity: 0.9; background: var(--accent); }
+
+/* ===== History Dropdown ===== */
+.history-wrap {
+  position: relative;
+}
+.history-dropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 340px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+}
+.history-dropdown.show { display: block; }
+.history-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.history-dropdown-header button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.history-dropdown-header button:hover { text-decoration: underline; }
+.history-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  gap: 10px;
+}
+.history-item:hover { background: var(--accent-light); }
+.history-item:last-child { border-bottom: none; }
+.history-item-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.history-item-info { flex: 1; min-width: 0; }
+.history-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-item-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.history-item-del {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: #c0b8a8;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+.history-item-del:hover { color: #d44; }
+.history-empty {
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ===== Mobile TOC Toggle ===== */
+.mobile-toc-btn {
+  display: none;
+}
+@media (max-width: 900px) {
+  .mobile-toc-btn { display: inline-flex; }
+}
+
+/* ===== Tab Bar ===== */
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  flex-shrink: 0;
+  padding: 0 8px;
+}
+.tab-bar::-webkit-scrollbar { height: 3px; }
+.tab-bar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  max-width: 200px;
+}
+.tab-item:hover { background: var(--accent-light); color: var(--text); }
+.tab-item.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.tab-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab-item-close {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: none;
+  background: none;
+  color: #c0b8a8;
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.1s;
+  line-height: 1;
+}
+.tab-item-close:hover { background: #e8d0d0; color: #c44; }
+.tab-new-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: 4px 2px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.tab-new-btn:hover { background: var(--accent-light); color: var(--accent); }
+
+/* ===== Drop Zone ===== */
+.drop-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(253,252,249,0.92);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+}
+.drop-overlay.show { display: flex; }
+.drop-hint {
+  text-align: center;
+  padding: 60px;
+  border: 3px dashed var(--accent);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.drop-hint .icon { font-size: 56px; margin-bottom: 16px; }
+.drop-hint .title { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.drop-hint .sub { font-size: 14px; color: var(--text-secondary); }
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 48px;
+}
+.empty-state-inner {
+  text-align: center;
+  max-width: 440px;
+}
+.empty-state-inner .icon { font-size: 64px; margin-bottom: 20px; }
+.empty-state-inner h2 { font-size: 24px; margin-bottom: 8px; }
+.empty-state-inner p { color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+
+/* ===== Content Area ===== */
+.content {
+  padding: 32px 48px 80px;
+  max-width: var(--content-max);
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ---- Headings ---- */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 12px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+  line-height: 1.3;
+  color: var(--text);
+}
+.content h2 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin: 44px 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.35;
+}
+.content h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 36px 0 12px;
+  line-height: 1.4;
+}
+.content h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 28px 0 10px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+.content h5, .content h6 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 24px 0 8px;
+  color: var(--text-secondary);
+}
+
+/* ---- Paragraph ---- */
+.content p {
+  margin: 0 0 14px;
+  text-align: justify;
+}
+
+/* ---- Links ---- */
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+
+/* ---- Bold & Italic ---- */
+.content strong { font-weight: 700; color: var(--text); }
+.content em { font-style: italic; }
+
+/* ---- Inline Code ---- */
+.content code:not(pre code) {
+  background: var(--code-bg);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  color: #6b4c12;
+  border: 1px solid var(--border);
+}
+
+/* ---- Code Blocks ---- */
+.content pre {
+  background: #2b2416;
+  color: #e8dcc8;
+  padding: 20px 24px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin: 16px 0 24px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.65;
+  box-shadow: var(--shadow);
+}
+.content pre code {
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  padding: 0;
+  border: none;
+  color: inherit;
+}
+
+/* ---- Blockquote ---- */
+.content blockquote {
+  margin: 16px 0 24px;
+  padding: 14px 20px;
+  border-left: 4px solid var(--blockquote-border);
+  background: var(--blockquote-bg);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--text-secondary);
+}
+.content blockquote p { margin-bottom: 6px; }
+.content blockquote p:last-child { margin-bottom: 0; }
+
+/* ---- Horizontal Rule ---- */
+.content hr {
+  margin: 36px 0;
+  border: none;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border), transparent);
+}
+
+/* ---- Tables ---- */
+.content .table-wrapper {
+  overflow-x: auto;
+  margin: 16px 0 24px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.content thead th {
+  background: var(--table-header);
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.content tbody td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.content tbody tr:nth-child(even) td { background: var(--table-stripe); }
+.content tbody tr:last-child td { border-bottom: none; }
+.content tbody td:first-child {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+/* ---- Lists ---- */
+.content ul, .content ol {
+  margin: 10px 0 18px;
+  padding-left: 24px;
+}
+.content li { margin-bottom: 4px; }
+.content li > ul, .content li > ol { margin-top: 4px; margin-bottom: 4px; }
+
+/* ---- Images ---- */
+.content img { max-width: 100%; border-radius: var(--radius); }
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .main { margin-left: 0; }
+  .content { padding: 24px 20px 60px; }
+  .toolbar { padding: 10px 16px; }
+}
+
+/* ===== Print ===== */
+@media print {
+  .sidebar, .toolbar, .drop-overlay { display: none !important; }
+  .main { margin-left: 0; }
+  .content { padding: 0; max-width: 100%; }
+  body { font-size: 12pt; }
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar TOC -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">目录</div>
+  <nav id="toc-nav"></nav>
+</aside>
+
+<!-- Main Content -->
+<div class="main">
+  <header class="toolbar" id="toolbar">
+    <span class="toolbar-title" id="toolbar-title"><strong>welcome</strong></span>
+    <div class="toolbar-actions">
+      <button class="btn" onclick="document.getElementById('fileInput').click()" title="打开 Markdown 文件">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        打开文件
+      </button>
+      <button class="btn mobile-toc-btn" onclick="document.getElementById('sidebar').classList.toggle('open')" title="目录">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        目录
+      </button>
+      <div class="history-wrap" id="historyWrap">
+        <button class="btn" id="historyBtn" onclick="toggleHistory()" title="历史文档">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          历史
+        </button>
+        <div class="history-dropdown" id="historyDropdown"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="tab-bar" id="tabBar"></div>
+
+  <div class="content" id="content"></div>
+</div>
+
+<!-- File Input (hidden) -->
+<input type="file" id="fileInput" accept=".md,.markdown,.txt" style="display:none" onchange="handleFileSelect(event)">
+
+<!-- Drag Overlay -->
+<div class="drop-overlay" id="dropOverlay">
+  <div class="drop-hint">
+    <div class="icon">📄</div>
+    <div class="title">释放文件以预览</div>
+    <div class="sub">支持 .md / .markdown / .txt 文件</div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Markdown Parser
+// ============================================================
+const Markdown = (() => {
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Parse inline markdown within a block
+  function parseInline(text) {
+    // Protect inline code spans first
+    const codeSpans = [];
+    text = text.replace(/`([^`]+)`/g, (_, code) => {
+      codeSpans.push('<code>' + escapeHtml(code) + '</code>');
+      return '\x00CODE' + (codeSpans.length - 1) + '\x00';
+    });
+
+    // Images
+    text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+
+    // Links
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+    // Bold (double asterisk)
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Italic (single asterisk, not part of bold)
+    text = text.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
+
+    // Strikethrough
+    text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+    // Restore code spans
+    text = text.replace(/\x00CODE(\d+)\x00/g, (_, i) => codeSpans[parseInt(i)]);
+
+    return text;
+  }
+
+  // Split table row cells, respecting escaped pipes
+  function splitTableCells(row) {
+    // Replace escaped pipes with placeholder
+    const placeholder = '\x00PIPE\x00';
+    const cleaned = row.replace(/\\\|/g, placeholder);
+    // Split by |, trim each cell
+    const cells = cleaned.split('|').map(c => c.trim());
+    // Restore escaped pipes
+    return cells.map(c => c.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '|'));
+  }
+
+  // Determine if a row is a table separator (e.g. |---|:---:|---:|)
+  function isTableSeparator(row) {
+    return /^\|[\s\-:|\s]+\|$/.test(row.trim());
+  }
+
+  // Parse alignment from separator row
+  function parseAlignment(row) {
+    const cells = splitTableCells(row);
+    return cells.filter(c => c !== '').map(c => {
+      if (c.startsWith(':') && c.endsWith(':')) return 'center';
+      if (c.endsWith(':')) return 'right';
+      return 'left';
+    });
+  }
+
+  // Check if line is a special block starter
+  function isSpecialLine(line) {
+    const t = line.trim();
+    return t.startsWith('#') || t.startsWith('```') || t.startsWith('>') ||
+      t.startsWith('|') || /^[-*+]\s/.test(t) || /^\d+\.\s/.test(t) ||
+      /^(-{3,}|\*{3,})$/.test(t);
+  }
+
+  // Parse table rows into HTML
+  function renderTable(rows) {
+    if (rows.length === 0) return '';
+    // Check if second row is separator
+    let headerRows = rows;
+    let align = [];
+    if (rows.length >= 2 && isTableSeparator(rows[1])) {
+      headerRows = [rows[0], ...rows.slice(2)];
+      align = parseAlignment(rows[1]);
+    }
+
+    let html = '<div class="table-wrapper"><table>';
+
+    // Header
+    if (headerRows.length > 0) {
+      html += '<thead><tr>';
+      const headerCells = splitTableCells(headerRows[0]).filter(c => c !== '');
+      headerCells.forEach((cell, i) => {
+        const al = align[i] ? ' style="text-align:' + align[i] + '"' : '';
+        html += '<th' + al + '>' + parseInline(cell) + '</th>';
+      });
+      html += '</tr></thead>';
+
+      // Body
+      if (headerRows.length > 1) {
+        html += '<tbody>';
+        for (let r = 1; r < headerRows.length; r++) {
+          html += '<tr>';
+          const cells = splitTableCells(headerRows[r]);
+          // Filter leading/trailing empty from split
+          const meaningful = [];
+          for (let i = 0; i < cells.length; i++) {
+            if (i === 0 && cells[i] === '') continue;
+            if (i === cells.length - 1 && cells[i] === '') continue;
+            meaningful.push(cells[i]);
+          }
+          meaningful.forEach((cell, i) => {
+            const al = align[i] ? ' style="text-align:' + align[i] + '"' : '';
+            html += '<td' + al + '>' + parseInline(cell) + '</td>';
+          });
+          html += '</tr>';
+        }
+        html += '</tbody>';
+      }
+    }
+
+    html += '</table></div>';
+    return html;
+  }
+
+  // Main parse function
+  function parse(md) {
+    const lines = md.split('\n');
+    let html = '';
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Fenced code block
+      if (trimmed.startsWith('```')) {
+        const lang = trimmed.slice(3).trim();
+        const codeLines = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        i++; // skip closing ```
+        // Remove trailing empty lines from code block
+        while (codeLines.length > 0 && codeLines[codeLines.length - 1].trim() === '') {
+          codeLines.pop();
+        }
+        while (codeLines.length > 0 && codeLines[0].trim() === '') {
+          codeLines.shift();
+        }
+        html += '<pre><code>' + escapeHtml(codeLines.join('\n')) + '</code></pre>';
+        continue;
+      }
+
+      // Table
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        const tableRows = [];
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          tableRows.push(lines[i]);
+          i++;
+        }
+        html += renderTable(tableRows);
+        continue;
+      }
+
+      // Horizontal rule
+      if (/^(-{3,}|\*{3,})$/.test(trimmed)) {
+        html += '<hr>';
+        i++;
+        continue;
+      }
+
+      // Heading
+      const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const text = headingMatch[2];
+        // Generate ID from text (strip markdown formatting for ID)
+        const id = text
+          .replace(/[*`~\[\]]/g, '')
+          .replace(/[^\w一-鿿\s-]/g, '')
+          .trim()
+          .replace(/\s+/g, '-')
+          .toLowerCase()
+          .replace(/-+/g, '-');
+        html += '<h' + level + ' id="' + id + '">' + parseInline(text) + '</h' + level + '>';
+        i++;
+        continue;
+      }
+
+      // Blockquote
+      if (trimmed.startsWith('>')) {
+        const quoteLines = [];
+        while (i < lines.length && lines[i].trim().startsWith('>')) {
+          let ql = lines[i].replace(/^>\s?/, '');
+          quoteLines.push(ql);
+          i++;
+        }
+        // Parse blockquote content recursively (it may contain markdown)
+        html += '<blockquote>' + parse(quoteLines.join('\n')) + '</blockquote>';
+        continue;
+      }
+
+      // Unordered list
+      if (/^[\s]*[-*+]\s+/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^[\s]*[-*+]\s+/.test(lines[i])) {
+          items.push(lines[i].replace(/^[\s]*[-*+]\s+/, ''));
+          i++;
+        }
+        html += '<ul>';
+        items.forEach(item => { html += '<li>' + parseInline(item) + '</li>'; });
+        html += '</ul>';
+        continue;
+      }
+
+      // Ordered list
+      if (/^[\s]*\d+\.\s+/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^[\s]*\d+\.\s+/.test(lines[i])) {
+          items.push(lines[i].replace(/^[\s]*\d+\.\s+/, ''));
+          i++;
+        }
+        html += '<ol>';
+        items.forEach(item => { html += '<li>' + parseInline(item) + '</li>'; });
+        html += '</ol>';
+        continue;
+      }
+
+      // Empty line
+      if (trimmed === '') {
+        i++;
+        continue;
+      }
+
+      // Paragraph
+      const paraLines = [];
+      while (i < lines.length && lines[i].trim() !== '' && !isSpecialLine(lines[i])) {
+        paraLines.push(lines[i]);
+        i++;
+      }
+      const paraText = paraLines.join(' ').replace(/\s+/g, ' ').trim();
+      if (paraText) {
+        html += '<p>' + parseInline(paraText) + '</p>';
+      }
+    }
+
+    return html;
+  }
+
+  return { parse };
+})();
+
+// ============================================================
+// App State & Functions
+// ============================================================
+const contentEl = document.getElementById('content');
+const toolbarTitle = document.getElementById('toolbar-title');
+const tabBar = document.getElementById('tabBar');
+const dropOverlay = document.getElementById('dropOverlay');
+const sidebar = document.getElementById('sidebar');
+const tocNav = document.getElementById('toc-nav');
+
+let tabs = [];
+let activeTabId = null;
+let tabIdCounter = 0;
+let scrollObserver = null;
+
+function generateTabId() {
+  return 'tab-' + (++tabIdCounter);
+}
+
+// ---- Tab Bar Rendering ----
+function renderTabBar() {
+  let html = '';
+  tabs.forEach(tab => {
+    const isActive = tab.id === activeTabId;
+    html +=
+      '<div class="tab-item' + (isActive ? ' active' : '') + '" onclick="switchTab(\'' + escapeAttr(tab.id) + '\')" title="' + escapeAttr(tab.name) + '">' +
+        '<span class="tab-item-name">' + escapeHtmlContent(tab.name) + '</span>' +
+        '<button class="tab-item-close" onclick="event.stopPropagation(); closeTab(\'' + escapeAttr(tab.id) + '\')">&times;</button>' +
+      '</div>';
+  });
+  html += '<button class="tab-new-btn" onclick="document.getElementById(\'fileInput\').click()" title="打开新文档">+</button>';
+  tabBar.innerHTML = html;
+}
+
+// ---- Tab Management ----
+function addTab(name, content) {
+  // Check existing tab with same name → switch to it
+  const existing = tabs.find(function(t) { return t.name === name; });
+  if (existing) {
+    switchTab(existing.id);
+    return;
+  }
+  var id = generateTabId();
+  tabs.push({ id: id, name: name, content: content });
+  activeTabId = id;
+  saveHistory(name, content);
+  renderTabBar();
+  renderActiveTab();
+}
+
+function switchTab(id) {
+  activeTabId = id;
+  renderTabBar();
+  renderActiveTab();
+}
+
+function closeTab(id) {
+  var idx = -1;
+  for (var i = 0; i < tabs.length; i++) {
+    if (tabs[i].id === id) { idx = i; break; }
+  }
+  if (idx === -1) return;
+  tabs.splice(idx, 1);
+
+  if (tabs.length === 0) {
+    activeTabId = null;
+    contentEl.innerHTML =
+      '<div class="empty-state">' +
+        '<div class="empty-state-inner">' +
+          '<div class="icon">📄</div>' +
+          '<h2>拖入 Markdown 文件即可预览</h2>' +
+          '<p>支持 .md / .markdown / .txt 文件，或将文件拖拽到页面任意位置</p>' +
+        '</div>' +
+      '</div>';
+    toolbarTitle.innerHTML = '';
+    tocNav.innerHTML = '';
+    if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+  } else {
+    var newIdx = Math.min(idx, tabs.length - 1);
+    activeTabId = tabs[newIdx].id;
+    renderActiveTab();
+  }
+  renderTabBar();
+}
+
+// ---- Render Active Tab ----
+function renderActiveTab() {
+  var tab = null;
+  for (var i = 0; i < tabs.length; i++) {
+    if (tabs[i].id === activeTabId) { tab = tabs[i]; break; }
+  }
+  if (!tab) return;
+
+  if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+
+  var html = Markdown.parse(tab.content);
+  contentEl.innerHTML = html;
+  toolbarTitle.innerHTML = '<strong>' + escapeHtmlContent(tab.name) + '</strong>';
+
+  setTimeout(function() {
+    buildTOC();
+    setupScrollSpy();
+  }, 0);
+}
+
+// ---- TOC Generation ----
+function buildTOC() {
+  const headings = contentEl.querySelectorAll('h1, h2, h3, h4');
+  tocNav.innerHTML = '';
+
+  headings.forEach((h, idx) => {
+    if (!h.id) { h.id = 'heading-' + idx; }
+    const a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.className = h.tagName.toLowerCase();
+    a.textContent = h.textContent;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    tocNav.appendChild(a);
+  });
+}
+
+function setupScrollSpy() {
+  const headings = contentEl.querySelectorAll('h1, h2, h3, h4');
+  const tocLinks = tocNav.querySelectorAll('a');
+
+  scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        tocLinks.forEach(link => link.classList.remove('active'));
+        const id = entry.target.id;
+        const active = tocNav.querySelector('a[href="#' + CSS.escape(id) + '"]');
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-80px 0px -60% 0px' });
+
+  headings.forEach(h => scrollObserver.observe(h));
+}
+
+function escapeHtmlContent(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ============================================================
+// History Management (localStorage)
+// ============================================================
+const HISTORY_KEY = 'md-viewer-history';
+const MAX_HISTORY = 20;
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveHistory(name, content) {
+  const history = getHistory();
+  // Remove existing entry with same name (dedup)
+  const filtered = history.filter(h => h.name !== name);
+  // Add to front
+  filtered.unshift({ name, content, time: Date.now() });
+  // Limit to MAX_HISTORY
+  const trimmed = filtered.slice(0, MAX_HISTORY);
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed)); }
+  catch { /* storage full, drop oldest */ }
+}
+
+function removeHistory(name) {
+  const history = getHistory().filter(h => h.name !== name);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 60000) return '刚刚';
+  if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0') + ' ' +
+    String(d.getHours()).padStart(2, '0') + ':' +
+    String(d.getMinutes()).padStart(2, '0');
+}
+
+function renderHistoryDropdown() {
+  const dd = document.getElementById('historyDropdown');
+  const history = getHistory();
+  if (history.length === 0) {
+    dd.innerHTML = '<div class="history-empty">还没有打开过文档<br>拖入 Markdown 文件即可记录</div>';
+    return;
+  }
+  let html = '<div class="history-dropdown-header"><span>最近打开</span><button onclick="clearHistory()">清空全部</button></div>';
+  history.forEach(h => {
+    html += `
+      <div class="history-item" onclick="loadHistoryItem('${escapeAttr(h.name)}')">
+        <div class="history-item-icon">📄</div>
+        <div class="history-item-info">
+          <div class="history-item-name">${escapeHtmlContent(h.name)}</div>
+          <div class="history-item-time">${formatTime(h.time)}</div>
+        </div>
+        <button class="history-item-del" onclick="event.stopPropagation(); removeHistoryItem('${escapeAttr(h.name)}')" title="删除">×</button>
+      </div>`;
+  });
+  dd.innerHTML = html;
+}
+
+function escapeAttr(str) {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;');
+}
+
+function toggleHistory() {
+  const dd = document.getElementById('historyDropdown');
+  const isOpen = dd.classList.contains('show');
+  if (isOpen) {
+    dd.classList.remove('show');
+  } else {
+    renderHistoryDropdown();
+    dd.classList.add('show');
+  }
+}
+
+function loadHistoryItem(name) {
+  const history = getHistory();
+  const entry = history.find(h => h.name === name);
+  if (entry) {
+    addTab(entry.name, entry.content);
+    document.getElementById('historyDropdown').classList.remove('show');
+  }
+}
+
+function removeHistoryItem(name) {
+  removeHistory(name);
+  renderHistoryDropdown();
+}
+
+function clearHistory() {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistoryDropdown();
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('historyWrap');
+  const dd = document.getElementById('historyDropdown');
+  if (wrap && dd && !wrap.contains(e.target)) {
+    dd.classList.remove('show');
+  }
+});
+
+// Load from file
+function loadFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target.result;
+    addTab(file.name, content);
+  };
+  reader.readAsText(file);
+}
+
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  loadFile(file);
+}
+
+// ============================================================
+// Drag & Drop
+// ============================================================
+let dragCounter = 0;
+
+document.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  dragCounter++;
+  if (dragCounter === 1) dropOverlay.classList.add('show');
+});
+
+document.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dragCounter--;
+  if (dragCounter === 0) dropOverlay.classList.remove('show');
+});
+
+document.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragCounter = 0;
+  dropOverlay.classList.remove('show');
+
+  const file = e.dataTransfer.files[0];
+  if (file && (file.name.endsWith('.md') || file.name.endsWith('.markdown') || file.name.endsWith('.txt'))) {
+    loadFile(file);
+  }
+});
+
+// ============================================================
+// Initialization — load reference document content
+// ============================================================
+(function init() {
+  // Try to load from embedded data first, then try fetch
+  const embedded = document.getElementById('default-md');
+  if (embedded && embedded.textContent.trim()) {
+    addTab('脂质数据处理流程对比_Anderson2024_Tang2026.md', embedded.textContent.trim());
+    return;
+  }
+
+  // Try fetching the reference document
+  fetch('basic_study/notes/脂质数据处理流程对比_Anderson2024_Tang2026.md')
+    .then(r => {
+      if (r.ok) return r.text();
+      throw new Error('not found');
+    })
+    .then(md => addTab('脂质数据处理流程对比_Anderson2024_Tang2026.md', md))
+    .catch(() => {
+      contentEl.innerHTML =
+        '<div class="empty-state">' +
+          '<div class="empty-state-inner">' +
+            '<div class="icon">📄</div>' +
+            '<h2>拖入 Markdown 文件即可预览</h2>' +
+            '<p>支持 .md / .markdown / .txt 文件，或将文件拖拽到页面任意位置</p>' +
+            '<br>' +
+            '<button class="btn btn-primary" onclick="document.getElementById(\'fileInput\').click()" style="font-size:15px;padding:10px 24px;">选择文件</button>' +
+          '</div>' +
+        '</div>';
+    });
+})();
+</script>
+
+<!-- Embedded default markdown content -->
+<script type="text/markdown" id="default-md">
+# 脂质数据处理流程对比：Anderson 2024 (LipiDex 2) vs Tang 2026 (NSCLC)
+
+> 两篇论文均以 **Compound Discoverer 3.3** 为上游峰检测工具，但下游处理管线完全不同。
+> Anderson 走"LipiDex 2 鉴定 + Degreaser 质控"路线，Tang 走"多库注释 + 内标归一化 + ML 建模"路线。
+
+---
+
+# 一、Anderson et al. (2024) — LipiDex 2 数据处理流程
+
+### 论文信息
+- **标题**：LipiDex 2 Integrates MS^n Tree-Based Fragmentation Methods and QC Modules to Improve Discovery Lipidomics
+- **期刊**：*Analytical Chemistry* 2024, 96(17): 6715-6723
+- **DOI**：[10.1021/acs.analchem.4c00359](https://doi.org/10.1021/acs.analchem.4c00359)
+
+---
+
+## 1.1 工具总览
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Compound Discoverer 3.3 (Thermo Scientific, 商业)                   │
+│    → 峰检测 / 保留时间对齐 / 特征提取 / 空白过滤                       │
+├─────────────────────────────────────────────────────────────────────┤
+│  LipiDex 2 (开源免费, github.com/coongroup/LipiDex-2)                │
+│    ├── Spectrum Searcher → MS/MS 谱图搜索与匹配                       │
+│    ├── Peak Finder       → 色谱峰识别 + 置信度分配                    │
+│    ├── Degreaser         → 交互式 QC 过滤 (6 面板可视化)              │
+│    └── Lipid Spectral Annotator → 谱图碎片注解与可视化                │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 1.2 完整处理流程（分步详解）
+
+### 阶段一：CD 3.3 原始数据预处理
+
+**输入**：Thermo `.raw` 原始质谱文件
+
+| 参数 | 设定值 | 解释 |
+|------|--------|------|
+| MS1 扫描范围 | m/z 100 — 5000 Da | 覆盖从小代谢物到大型脂质 (如 TG) 的质量范围 |
+| 保留时间范围 | 0.4 — 21 min | 排除死时间 (溶剂峰) 和柱子冲洗段的噪音 |
+| RT 对齐容差 | 0.2 min | 不同样本间同一化合物的 RT 在这个窗口内被认为是对齐的 |
+| 质量容差 | 10 ppm | Orbitrap 的高分辨率允许 10 ppm 作为合理匹配窗口 |
+| 最小峰强度 | 5 × 10⁵ | 排除低强度噪音峰 |
+| 最大峰宽 | 0.25 min | 过滤异常宽峰 (可能是色谱柱残留或基线漂移) |
+| 最小 S/N | 1.5 | 信号必须至少是噪音的 1.5 倍 |
+| 空白过滤 | 峰面积 ≥ 3× 空白 | 去除溶剂/色谱柱流失带来的背景干扰 |
+
+**CD 输出**：一个包含所有色谱特征 (features) 的峰表，含 m/z、RT、峰面积、MS² 谱图等信息。
+
+**CD 不做的**：脂质鉴定。这是 LipiDex 2 接手的工作。
+
+---
+
+### 阶段二：LipiDex 2 Spectrum Searcher（谱图搜索）
+
+**输入**：CD 3.3 结果数据库 + LipiDex 2 生成的 in silico 脂质谱图库
+
+**谱图库生成** (Library Generator)：
+- 用户定义脂质结构模板 → 自动迭代所有脂肪酸链组合 → 生成预测 MS² 碎片谱图
+- 支持 MS^n 树状碎裂（HCD MS² → CAD MS² → CAD MS³ 逐级碎裂路径）
+- 支持复杂脂质子单元模板（如心磷脂 CL = 2 × PA 子单元）
+- 用户可定义每级碎裂的"必要碎片"：缺失则鉴定自动降级
+
+**搜库参数**：
+
+| 参数 | 阈值 | 解释 |
+|------|------|------|
+| 脂质谱图纯度 (Spectral Purity) | ≥ 75% | 去除与共流出同量异位脂质共享碎片超过 25% 的匹配 |
+| Dot Product (正向) | ≥ 500 | 实验谱图 vs 谱库谱图的碎片重叠程度，范围 0-999 |
+| Reverse Dot Product (反向) | ≥ 700 | 谱库碎片在实验谱图中被找到的比例——抗背景噪音能力更强 |
+| 最低出现次数 | ≥ 2 个样本 | 只在一个样本出现的"独有特征"可靠性低 |
+| 脂肪酸链不确定时 | 标注为 sum composition | 如只知 PC 34:1 但不知 16:0/18:1 还是 18:1/16:0 |
+
+> **为什么 Reverse Dot Product 阈值更高？** 正向 DP 看的是双向匹配（你有的碎片我也有的碎片），反向 DP 主要看"谱库的碎片在实验谱图中是否都能找到"。设置更高是因为我们倾向于认为"谱库碎片大多能找到 = 匹配更可信"，同时容忍一些实验谱图的额外噪音碎片。
+
+---
+
+### 阶段三：LipiDex 2 Peak Finder（峰识别与置信度分配）
+
+**功能 1：相关性过滤去除"影子峰"**
+
+未鉴定特征如果满足以下三个条件，会被判定为从共流出已鉴定峰中产生的虚假特征：
+
+| 条件 | 阈值 |
+|------|------|
+| (1) 时间窗口 | 在已鉴定特征的 FWHM ± 0.5×FWHM 内 |
+| (2) 出现频率 | ≥ 10 个非 QC/非空白样本 |
+| (3) 相关性 | 与已鉴定特征的皮尔逊/斯皮尔曼相关系数 ≥ 0.99 |
+
+**功能 2：置信度分配**
+- 根据 Library Generator 中定义的"必要碎片"是否存在，确定每个鉴定的结构分辨率级别
+- 特殊逻辑：plasmenyl vs plasmanyl 区分——检查特征 plasmenyl 碎片 + 峰纯度 → 证据不足则降级
+
+---
+
+### 阶段四：LipiDex 2 Degreaser（QC 过滤——核心创新）
+
+**六大 QC 可视化面板**：
+
+| 面板 | 检查内容 | 算法/方法 |
+|------|----------|-----------|
+| **① RT Model** | 脂质类别内保留时间自洽性 | RT ~ FA碳数 + FA不饱和度 (sECN 线性回归) |
+| **② LDR** | 线性动态范围 | 迭代子序列搜索，adj. R² ≥ 0.97, slope ≥ 0.5 |
+| **③ Sample Quant** | 样本定量值在 LDR 中的位置 | 绿色背景 = 线性区内，线性区外定量不可靠 |
+| **④ Spectral Annotator** | 所有关联 MS^n 谱图 | 逐张翻看、碎片类型彩色标注 |
+| **⑤ %RSD + Run Order** | QC 重复进样稳定性 | %RSD 随运行顺序绘制，检测仪器漂移 |
+| **⑥ PQF** | CD 3.3 峰质量因子 | Modality + Zig-zag + Jaggedness + FWHM-to-base Ratio |
+
+> **PQF (Peak Quality Factor)**：Compound Discoverer 内置的峰形质量综合评分。四个维度分别考察：峰形是否单峰而非劈裂 (Modality)、轮廓是否平滑 (Zig-zag)、基线噪音水平 (Jaggedness)、峰宽是否合理 (FWHM-to-base ratio)。总分越低峰形越差。
+
+**QC 工作流**：自动阈值过滤（标记可疑特征） → 人工逐条审查被标记的 → 看图决定保留或丢弃 → 导出最终峰表
+
+**性能数据**：3000 个脂质特征的分析 < 10 秒（普通电脑），3000+ 特征中约 83% 未鉴定特征被去除。
+
+---
+
+### 阶段五：LipiDex 2 Lipid Spectral Annotator（谱图注解）
+
+两种使用模式：
+- **独立模式**：导入 Spectrum Searcher 结果 → 生成碎片类型彩色标注的发表级谱图
+- **Degreaser 内嵌模式**：QC 审查时实时查看所有关联 MS^n 谱图（不同极性/不同碎裂层级/不同碎裂方法）
+
+---
+
+## 1.3 处理流程图（完整）
+
+```
+.raw 文件
+    │
+    ▼
+┌──────────────────────────────────┐
+│  CD 3.3                          │
+│  峰检测 / RT对齐 / 特征提取       │
+│  MS1: 100-5000 Da, RT: 0.4-21 min│
+│  对齐: 0.2 min, 10 ppm           │
+│  S/N ≥ 1.5, 峰 ≥ 3× 空白         │
+└──────────────┬───────────────────┘
+               │ CD 结果数据库
+               ▼
+┌──────────────────────────────────┐
+│  LipiDex 2 Library Generator     │
+│  用户定义脂质模板                 │
+│  → in silico 预测谱图库 (.json)   │
+└──────────────┬───────────────────┘
+               │
+               ▼
+┌──────────────────────────────────┐
+│  LipiDex 2 Spectrum Searcher     │
+│  MS/MS 谱图 vs in silico 谱库    │
+│  谱图纯度 ≥ 75%                  │
+│  Dot Product ≥ 500               │
+│  Reverse Dot Product ≥ 700       │
+│  至少出现在 ≥ 2 个样本中          │
+└──────────────┬───────────────────┘
+               │ 匹配结果
+               ▼
+┌──────────────────────────────────┐
+│  LipiDex 2 Peak Finder           │
+│  相关性过滤 → 去除"影子峰"       │
+│  置信度分配 → 结构分辨率分级     │
+│  plasmenyl/plasmanyl 特殊逻辑    │
+└──────────────┬───────────────────┘
+               │ 初步峰表 (719 鉴定 + 13898 未鉴定)
+               ▼
+┌──────────────────────────────────┐
+│  LipiDex 2 Degreaser QC          │
+│  ┌─ ① RT Model (sECN 回归)      │
+│  ├─ ② LDR (迭代线性搜索)        │
+│  ├─ ③ Sample Quant (线性区标注) │
+│  ├─ ④ Spectral Annotator        │
+│  ├─ ⑤ %RSD + Run Order          │
+│  └─ ⑥ PQF (峰形质量)            │
+│  → 自动标记 + 人工确认          │
+└──────────────┬───────────────────┘
+               │ 过滤后峰表 (480 鉴定 + 2443 未鉴定)
+               ▼
+┌──────────────────────────────────┐
+│  Lipid Spectral Annotator         │
+│  碎片类型彩色标注 → 发表级谱图    │
+└──────────────────────────────────┘
+               │
+               ▼
+      最终峰表 (.csv)
+      → MetaboAnalyst / R 下游分析
+```
+
+---
+
+# 二、Tang et al. (2026) — NSCLC 脂质组学 + ML 数据处理流程
+
+### 论文信息
+- **标题**：HPLC-HRMS and Interpretable Machine Learning Decipher Serum Lipidomic Signatures in NSCLC
+- **期刊**：*PeerJ* 2026, 14:e21504
+- **DOI**：[10.7717/peerj.21504](https://doi.org/10.7717/peerj.21504)
+
+---
+
+## 2.1 工具总览
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Compound Discoverer 3.3 (Thermo Scientific, 商业)                   │
+│    → 脂质注释：精确质量 + RT + MS² + 同位素模式 + 多库搜索            │
+├─────────────────────────────────────────────────────────────────────┤
+│  QC 过滤 (CD 内置 + 手动脚本)                                        │
+│    → RSD ≤ 20% / 至少 6 个可用 QC                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│  归一化 & 预处理 (R 4.5.0)                                           │
+│    → 内标归一化 / log2(x+1) / z-score                               │
+├─────────────────────────────────────────────────────────────────────┤
+│  差异分析 & 通路富集                                                 │
+│    → t-test + FDR / MetaboAnalyst 6.0                                │
+├─────────────────────────────────────────────────────────────────────┤
+│  机器学习建模 (R 4.5.0)                                              │
+│    → LASSO / SVM / XGBoost / LightGBM (4 模型对比)                   │
+│    → 嵌套 10 折 CV + OOF 预测 + Bootstrap 1000×                     │
+├─────────────────────────────────────────────────────────────────────┤
+│  特征优选 & 解释                                                     │
+│    → limma 初筛 + LightGBM-RFE + TreeSHAP                           │
+├─────────────────────────────────────────────────────────────────────┤
+│  临床模型构建                                                        │
+│    → Firth 逻辑回归 + Ridge 逻辑回归 → Nomogram                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2.2 完整处理流程（分步详解）
+
+### 阶段一：CD 3.3 脂质注释
+
+**输入**：Q-Exactive Plus Orbitrap 采集的 `.raw` 文件（DDA Top 10 MS²）
+
+**CD 3.3 注释参数**：
+
+| 参数 | 设定值 | 解释 |
+|------|--------|------|
+| 前体离子质量容差 | ±5.00 ppm | 比 Anderson (10 ppm) 更严——临床建模对鉴定精度要求更高 |
+| 同位素模式验证 | 启用 | 检查元素组成是否符合天然同位素分布 |
+| 谱图数据库 | mzCloud + mzVault + Metabolika + ChemSpider | 4 个互补数据库同时搜索 |
+| MassList | LIPID MAPS Structure Database (LMSD) | 预筛候选质量——只保留质量匹配到 LMSD 脂质的特征 |
+| MS² 判别逻辑 | 特征碎片 + 中性丢失 + 头基特异信号 | 三种 MS² 信息交叉验证，排除同量异位脂质 |
+
+**CD 输出的注释结果**包含：
+- 脂质名称（如 LPC O-18:1）
+- 分子式、精确 m/z、保留时间
+- ppm 质量偏差
+- 参考离子类型 ([M+H]⁺ / [M-H]⁻ / [M+HCOO]⁻ / [M+NH₄]⁺）
+- MS² 匹配得分
+
+---
+
+### 阶段二：QC 过滤
+
+| 过滤条件 | 阈值 | 逻辑 |
+|----------|------|------|
+| QC 可用样本数 | ≥ 6 个 | QC 样本太少无法可靠计算变异系数 |
+| QC RSD | ≤ 20% | 比 Anderson (30%) 更严——临床标志物对定量稳定性要求更高 |
+
+**变异系数 (CV/RSD) 计算公式**：
+```
+RSD (%) = (QC 峰面积标准差 / QC 峰面积均值) × 100
+```
+
+---
+
+### 阶段三：归一化（三步走）
+
+```
+原始峰面积
+    │
+    ├─→ ① 内标归一化
+    │     每个脂质的峰面积 ÷ 内标 PC 19:0/19:0 的峰面积
+    │     消除：进样量误差、离子化效率日间波动
+    │
+    ├─→ ② log2(x+1) 变换
+    │     将右偏分布拉正（脂质丰度通常跨越 4-5 个数量级）
+    │     消除：高丰度脂质 (如 TG) 对后续统计/模型的主导效应
+    │     +1 是因为 log2(0) 无定义
+    │
+    └─→ ③ z-score 标准化
+          每个脂质特征：(x - 该特征均值) / 该特征标准差
+          消除：不同脂质的量纲差异
+          所有特征均值为 0、标准差为 1 → 权重均等
+```
+
+---
+
+### 阶段四：去除非脂质 & 缺失值
+
+- **非脂质特征**：CD 3.3 也会注释小分子代谢物（氨基酸、有机酸等），这部分被手动剔除
+- **缺失值**：如果在多数学样本中无信号的特征，直接删除（不使用填补法，保留最稳健的数据）
+
+**最终产出**：331 个高质量脂质特征进入下游分析
+
+---
+
+### 阶段五：差异分析 & 通路富集
+
+| 步骤 | 方法 | 参数 |
+|------|------|------|
+| 无监督降维 | PCA / UMAP / t-SNE | 确认组间可否在脂质空间分离 |
+| 差异分析 | 双侧 t 检验 + Benjamini-Hochberg FDR 校正 | FDR < 0.05, \|log2FC\| > 0.75 |
+| 通路富集 | MetaboAnalyst 6.0 | KEGG + 代谢物集富集分析 |
+
+**结果**：75 个差异脂质（53↓/22↑），甘油磷脂代谢/醚脂代谢/鞘脂代谢最受扰动
+
+---
+
+### 阶段六：机器学习建模（四模型对比 + 嵌套 CV）
+
+**嵌套重采样策略**（防止过拟合的核心设计）：
+
+```
+全部数据 (n=70)
+    │
+    ├─ 外层：10 折分层 CV
+    │   └─ 每折：训练集 63 样本 / 测试集 7 样本
+    │       │
+    │       ├─ 训练集内标准化 (z-score 基于训练集)
+    │       ├─ 内层：10 折 CV 调参
+    │       │   └─ 选择最优超参数
+    │       ├─ 用最优参数在训练集上重训练
+    │       └─ 预测测试集 7 个样本
+    │
+    └─ 汇总所有 70 个 OOF 预测 → 计算 AUC 等指标
+```
+
+**四种模型及调参方式**：
+
+| 模型 | R 包 | 调参策略 |
+|------|------|----------|
+| **LASSO** | glmnet | 内层 10 折 CV 选最优 λ |
+| **SVM (RBF 核)** | caret | 内层网格搜索 C 和 γ (sigma) |
+| **XGBoost** | xgboost | 内层 10 折 CV + 早停 (log-loss) |
+| **LightGBM** | lightgbm | learning_rate=0.05, num_leaves=31, 内层 CV → 最优迭代数 |
+
+**LightGBM 超参数详解**：
+
+| 参数 | 值 | 含义 |
+|------|-----|------|
+| learning_rate | 0.05 | 每棵树的贡献权重——越小越稳健但需更多轮数 |
+| num_leaves | 31 | 每棵树的最大叶节点数，控制树复杂度 |
+| min_data_in_leaf | 10 | 每个叶节点最少样本数——防止过拟合 |
+| feature_fraction | 0.90 | 每轮随机选取 90% 特征——增加随机性防过拟合 |
+| bagging_fraction | 0.80 | 每轮随机选取 80% 样本——Bootstrap 聚合 |
+| bagging_freq | 1 | 每轮都做 bagging |
+| max_depth | -1 | 不限制树深度（由 num_leaves 隐式控制） |
+| 早停轮数 | 150 | 连续 150 轮验证 AUC 不提升则停止 |
+| 最大轮数 | 3000 | 安全上限 |
+
+**评估指标**：
+
+| 指标 | 含义 |
+|------|------|
+| AUC (DeLong 95% CI) | ROC 曲线下面积——区分度的黄金标准 |
+| Youden's Index | 敏感度 + 特异度 - 1——最佳切点选择标准 |
+| Accuracy | 正确分类比例 |
+| Sensitivity/Specificity | 真阳性率 / 真阴性率 |
+| PPV / NPV | 阳性预测值 / 阴性预测值 |
+| F1 Score | 敏感度和 PPV 的调和平均 |
+| Brier Score | 预测概率与真实标签的均方误差——越低越好 |
+| Bootstrap AUC (B=1000) | 对 OOF 预测做 1000 次重采样，评估 AUC 稳定性 |
+
+---
+
+### 阶段七：特征选择 & SHAP 解释
+
+**三阶段特征优选**：
+
+```
+75 个差异脂质 (t-test + FDR)
+    │
+    ├─→ limma + 经验贝叶斯 (FDR < 0.05 + 效应量标准)
+    │     每折训练集内重新筛选 → 保留统计显著 + 效应量足够的脂质
+    │
+    ├─→ LightGBM-RFE (递归特征消除)
+    │     反复训练 → 淘汰最不重要特征 → 直到最优子集大小
+    │
+    └─→ TreeSHAP
+          每个脂质 → 对每个样本预测的贡献值 (SHAP value)
+          汇总 → 全局特征重要性 (Mean |SHAP|)
+```
+
+**SHAP 三类可视化**：
+
+| 图表类型 | 展示了什么 |
+|----------|-----------|
+| SHAP 柱状图 (Bar plot) | 全局重要性排序 (Top 20 脂质按 Mean \|SHAP\|) |
+| SHAP 蜂群图 (Beeswarm) | 每个样本 × 每个脂质的 SHAP 分布 + 方向 (红=高丰度, 蓝=低丰度) |
+| SHAP 依赖图 (Dependence) | 单个脂质的丰度 vs SHAP 值关系——检查是否单调/线性 |
+
+---
+
+### 阶段八：临床-脂质联合模型
+
+**三模型对比**：
+
+| 模型 | 特征集 | AUC | 构建方法 |
+|------|--------|-----|----------|
+| Model A | 仅 Top 20 脂质 | 0.924 | LightGBM (OOF 预测) |
+| Model C | 仅临床变量 (年龄/BMI/吸烟/饮酒/性别) | 0.792 | 逻辑回归 |
+| Model B | 脂质 + 临床 | **0.946** | Firth 逻辑回归 (处理小样本+稀有事件) |
+
+**列线图（Nomogram）构建**：
+
+由于 LightGBM 是数百棵树的加权求和，不能直接写成"得分 = β₁×X₁ + β₂×X₂…"的 nomogram 形式。论文的做法：
+
+1. 用 **Ridge 惩罚逻辑回归** + 限制立方样条 (Restricted Cubic Splines, RCS) 作为 LightGBM 的可解释代理模型
+2. 从 Ridge 模型提取系数 → Nomogram
+3. 最终纳入 5 个变量：年龄 + 饮酒史 + BMI + SL 38:5 + LPC(O-18:1) + Decanoylcarnitine
+
+> **为什么用 Firth 逻辑回归而非普通逻辑回归？** 当样本量小且结局事件（患癌 vs 不患癌）不平衡时，普通逻辑回归的极大似然估计有偏——Firth 方法通过加一个惩罚项（Jeffreys prior）来消除一阶偏差，在小样本中给出更可靠的系数和置信区间。
+
+---
+
+## 2.3 处理流程图（完整）
+
+```
+.raw 文件 (Q-Exactive Plus Orbitrap, DDA Top 10)
+    │
+    ▼
+┌──────────────────────────────────────────┐
+│  CD 3.3 脂质注释                          │
+│  前体离子: ±5.00 ppm                      │
+│  同位素模式: 验证元素组成                  │
+│  谱库: mzCloud + mzVault + Metabolika    │
+│        + ChemSpider                      │
+│  MassList: LIPID MAPS LMSD               │
+│  MS²判别: 特征碎片 + 中性丢失 + 头基信号   │
+│  同量异位排除: 亚类碎片交叉验证            │
+└──────────────┬───────────────────────────┘
+               │ 初步注释 → 标注每个峰的脂质信息
+               ▼
+┌──────────────────────────────────────────┐
+│  QC 过滤                                  │
+│  条件1: QC 可用样本 ≥ 6 个                │
+│  条件2: QC RSD ≤ 20%                      │
+│  → 不满足任一条件 → 删除该特征             │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│  归一化 (R 4.5.0)                         │
+│  ① 内标归一化: 峰面积 ÷ IS(PC 19:0/19:0) │
+│  ② log2(x+1): 稳定方差，抑制高丰度主导    │
+│  ③ z-score: 均值=0, 标准差=1，消除量纲    │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│  去除非脂质特征 & 缺失值特征               │
+│  → 保留 331 个高质量脂质                   │
+└──────────────┬───────────────────────────┘
+               │
+               ├──────────────────────────────────────┐
+               ▼                                      ▼
+┌──────────────────────────┐          ┌──────────────────────────┐
+│  差异分析 & 通路富集      │          │  ML 建模 (嵌套 10×10 CV)  │
+│  PCA / UMAP / t-SNE      │          │                          │
+│  t-test + FDR < 0.05     │          │  ┌─ LASSO               │
+│  |log2FC| > 0.75         │          │  ├─ SVM (RBF)           │
+│  → 75 差异脂质           │          │  ├─ XGBoost             │
+│  MetaboAnalyst 6.0       │          │  └─ LightGBM ← 最优     │
+│  → 通路富集结果          │          │                          │
+└──────────┬───────────────┘          └──────────┬───────────────┘
+           │                                     │
+           │                            OOF 预测 → AUC/Brier等
+           │                                     │
+           ▼                                     ▼
+┌──────────────────────────────────────────────────────────┐
+│  特征优选: limma初筛 → LightGBM-RFE → SHAP排序           │
+│  Top 20 脂质 → 与临床变量合并                            │
+└──────────────┬───────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│  联合模型 & Nomogram                      │
+│  Firth 逻辑回归 (脂质+临床)               │
+│  AUC=0.946 | 校准良好 | DCA 净收益        │
+│                                          │
+│  Ridge 逻辑回归 → Nomogram               │
+│  年龄 + 饮酒 + BMI + SL 38:5             │
+│  + LPC(O-18:1) + Decanoylcarnitine       │
+└──────────────────────────────────────────┘
+```
+
+---
+
+# 三、两篇论文的核心差异对比
+
+| 对比维度 | Anderson 2024 (LipiDex 2) | Tang 2026 (NSCLC) |
+|----------|--------------------------|-------------------|
+| **研究目的** | 开发开源脂质鉴定 + QC 软件 | 发现 NSCLC 脂质标志物 + 建预测模型 |
+| **CD 3.3 角色** | 仅做峰检测/对齐/特征提取 | 全流程脂质注释 (多数据库 + MassList) |
+| **脂质鉴定方式** | CD → LipiDex 2 (in silico 谱库) | CD 3.3 自身 (mzCloud/mzVault/Metabolika/ChemSpider + LMSD) |
+| **谱库类型** | 用户自定义 in silico 预测谱库 | 实验谱库 (mzCloud) + 化学数据库 (ChemSpider/Metabolika) + 脂质专业库 (LMSD) |
+| **QC 工具** | Degreaser 6 面板交互式 QC | CD 内置 PQF + 手动脚本 (RSD + QC 可用数) |
+| **QC RSD 阈值** | ≤ 30% | ≤ 20% |
+| **归一化** | CD 内置归一化 | 三步: IS归一化 → log2 → z-score |
+| **下游分析** | MetaboAnalyst / R (用户自选) | R: t-test → limma → 四模型对比 → SHAP → Nomogram |
+| **模型解释** | 无 (软件输出最终峰表) | SHAP beeswarm + dependence plots |
+| **可重复性** | 软件免费开源，GitHub 下载 | 代码和数据上传至 Mendeley Data |
+| **与 LipidSearch 的关系** | 替代方案（免费 vs 付费） | 未使用 LipidSearch，CD 自身完成脂质注释 |
+
+---
+
+# 四、对你实验室的实操建议
+
+### 如果选 Anderson 2024 路线 (CD + LipiDex 2)：
+
+1. CD 3.3 完成峰检测后，将结果数据库导入 LipiDex 2
+2. 用 LipiDex 2 Library Generator 建一个与你研究相关的脂质谱库 (如环境污染物暴露后的氧化脂质)
+3. 运行 Spectrum Searcher → Peak Finder → Degreaser 三步
+4. Degreaser 里重点关注 RT Model（脂类内 RT 自洽性）和 %RSD（仪器稳定性）
+5. 导出最终峰表 → MetaboAnalyst 做通路分析
+
+### 如果选 Tang 2026 路线 (CD + ML)：
+
+1. CD 3.3 配置中加入 LIPID MAPS LMSD MassList（如果还没加的话）
+2. 搜库勾选 mzCloud + mzVault + ChemSpider（Metabolika 可能需额外授权）
+3. QC RSD 根据你的研究目的设阈值——发方法学论文用 30%，发临床/环境健康标志物论文建议 ≤ 20%
+4. 归一化三步走（尤其是 log2 + z-score，这是 ML 建模的标配）
+5. 用 R 跑嵌套 CV + 多模型对比，SHAP 做特征解释——如果样本量不够 (n < 50/组)，优先用 LASSO（Brier 低意味着不准度低）而非树模型
+
+### 两条路线的关系：
+
+```
+CD 3.3 峰检测/注释
+    │
+    ├──→ LipiDex 2 (Anderson路线) → 脂质鉴定 + QC → 峰表 → 分析
+    │       优势：免费、开源、MS^n 支持、交互式 QC
+    │
+    └──→ ML建模 (Tang路线) → 差异分析 → 特征优选 → SHAP → 预测模型
+            优势：从数据到临床决策的完整闭环
+            前提：需要足够的样本量 (≥ 30-50/组)
+```
+
+两条路线不互斥——理想情况是先走 Anderson 路线的 Degreaser QC 保证数据质量，再走 Tang 路线的 ML 建模挖掘标志物喵。
+</script>
+
+</body>
+</html>
