@@ -4,6 +4,7 @@ MS-MINT/
 basic_study/
 beida-sjp/
 60w_data/
+PYOpenMS/test_data
 
 # Python 缓存
 __pycache__/
