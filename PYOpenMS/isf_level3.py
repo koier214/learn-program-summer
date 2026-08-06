@@ -54,50 +54,72 @@ from tqdm import tqdm
 
 
 def _peak_smooth(x: np.ndarray, level: int = 2) -> np.ndarray:
-    """Triangular weighted moving average, identical to .isf_peak_smooth."""
-    x = np.asarray(x, dtype=np.float64).copy()
+    """Triangular weighted moving average, identical to .isf_peak_smooth.
+
+    Accepts 1D array or 2D array (scans × features, smoothed column-wise).
+    """
+    x = np.asarray(x, dtype=np.float64)
     x[~np.isfinite(x)] = 0.0
 
     n = int(level)
-    N = len(x)
 
-    if N <= 2 * n or N < 3 or np.max(x) == np.min(x):
-        return x
+    if x.ndim == 1:
+        N = len(x)
+        if N <= 2 * n or N < 3 or np.max(x) == np.min(x):
+            return x.copy()
+        # Pre-compute weight matrix and apply
+        W = _build_smooth_weights(N, n)
+        return W @ x
 
-    y = np.zeros(N, dtype=np.float64)
+    # 2D: matrix (scans × features), smooth each column
+    N = x.shape[0]
+    if N <= 2 * n or N < 3:
+        return x.copy()
+    W = _build_smooth_weights(N, n)
+    # 只对非全零列做平滑（全零列结果也是零）
+    col_range = np.max(x, axis=0) - np.min(x, axis=0)
+    active = col_range > 0
+    result = x.copy()
+    if np.any(active):
+        result[:, active] = W @ x[:, active]
+    return result
 
-    # Head: first n points (0-indexed)
+
+def _build_smooth_weights(N: int, n: int) -> np.ndarray:
+    """Build normalized (N, N) weight matrix for triangular moving average."""
+    W = np.zeros((N, N), dtype=np.float64)
+
+    # Head rows
     for i in range(n):
-        w1 = list(range(n - i + 1, n + 2))       # (n - i_r + 2):(n + 1) in R
-        w2 = list(range(n, 0, -1))                 # n:1 in R
+        w1 = list(range(n - i + 1, n + 2))
+        w2 = list(range(n, 0, -1))
         weights = np.array(w1 + w2, dtype=np.float64)
-        values = x[: i + n + 1]                    # seq_len(i_r + n) in R
-        y[i] = np.sum(weights * values) / np.sum(weights)
+        W[i, : i + n + 1] = weights / np.sum(weights)
 
-    # Middle: (n+1):(N-n) in R → n:(N-n) 0-indexed
+    # Middle rows
     mid_weights = np.array(
         list(range(1, n + 2)) + list(range(n, 0, -1)),
         dtype=np.float64,
     )
+    mid_sum = np.sum(mid_weights)
+    half_window = n
     for i in range(n, N - n):
-        values = x[i - n : i + n + 1]
-        y[i] = np.sum(mid_weights * values) / np.sum(mid_weights)
+        W[i, i - half_window : i + half_window + 1] = mid_weights / mid_sum
 
-    # Tail: last n points (0-indexed)
+    # Tail rows
     for i in range(N - n, N):
-        i_r = i + 1  # 1-indexed
-        w1 = list(range(1, n + 1))                 # 1:n in R
+        i_r = i + 1
+        w1 = list(range(1, n + 1))
         start = n + 1
         end = n + i_r - N + 1
         if start >= end:
-            w2 = list(range(start, end - 1, -1))   # decreasing: (n+1):(n+i_r-N+1)
+            w2 = list(range(start, end - 1, -1))
         else:
             w2 = []
         weights = np.array(w1 + w2, dtype=np.float64)
-        values = x[i_r - n - 1 : N]
-        y[i] = np.sum(weights * values) / np.sum(weights)
+        W[i, i_r - n - 1 : N] = weights / np.sum(weights)
 
-    return y
+    return W
 
 
 def _cor_one_to_many(precursor_eic: np.ndarray, fragment_matrix: np.ndarray) -> np.ndarray:
@@ -305,24 +327,35 @@ def _process_one_file_eic(
             continue
 
         # ---- 直接构建 EIC 矩阵（所有特征共用同一扫描网格） ----
-        feature_ids_in_eic = list(required_features)
+        feature_ids_in_eic = np.array(required_features)
         n_features_in_block = len(feature_ids_in_eic)
         eic_matrix = np.zeros((n_scans_window, n_features_in_block), dtype=np.float64)
 
-        for j, feature_id in enumerate(feature_ids_in_eic):
-            mz_low = mz[feature_id] - mz_tol
-            mz_high = mz[feature_id] + mz_tol
-            for i in range(n_scans_window):
-                mz_arr = window_mz[i]
-                if len(mz_arr) == 0:
-                    continue
-                mask = (mz_arr >= mz_low) & (mz_arr <= mz_high)
-                if np.any(mask):
-                    eic_matrix[i, j] = float(np.sum(window_int[i][mask]))
+        # 预计算所有特征的 m/z 上下界（向量化准备）
+        mz_lows = mz[feature_ids_in_eic] - mz_tol
+        mz_highs = mz[feature_ids_in_eic] + mz_tol
 
-        # Smooth each EIC
-        for j in range(eic_matrix.shape[1]):
-            eic_matrix[:, j] = _peak_smooth(eic_matrix[:, j], level=smooth_level)
+        for i in range(n_scans_window):
+            mz_arr = window_mz[i]
+            if len(mz_arr) == 0:
+                continue
+            int_arr = window_int[i]
+
+            # 向量化二分查找：所有特征一次完成
+            lefts = np.searchsorted(mz_arr, mz_lows, side="left")
+            rights = np.searchsorted(mz_arr, mz_highs, side="right")
+
+            # 累积强度，O(1) 区间求和
+            cum_int = np.empty(len(int_arr) + 1, dtype=np.float64)
+            cum_int[0] = 0.0
+            np.cumsum(int_arr, out=cum_int[1:])
+
+            valid = lefts < rights
+            if np.any(valid):
+                eic_matrix[i, valid] = cum_int[rights[valid]] - cum_int[lefts[valid]]
+
+        # Smooth all EICs at once (vectorized matrix multiply)
+        eic_matrix = _peak_smooth(eic_matrix, level=smooth_level)
 
         # 释放窗口数据
         del window_mz, window_int
@@ -517,6 +550,7 @@ class ISFLevel3TwoStage:
         # Cache and resume
         work_dir: Optional[str] = None,
         run_id: str = "default",
+        batch_label: str = "",
         rebuild_intensity_cache: bool = False,
         rebuild_candidates: bool = False,
         rebuild_stage1: bool = False,
@@ -570,6 +604,7 @@ class ISFLevel3TwoStage:
         # Cache
         self.work_dir_in = work_dir
         self.run_id = run_id
+        self.batch_label = batch_label
 
         # Rebuild flags
         self.rebuild_intensity_cache = rebuild_intensity_cache
@@ -749,9 +784,14 @@ class ISFLevel3TwoStage:
     # ----------------------------------------------------------
     def _prepare_intensity_matrix(self) -> np.memmap:
         """Build or reuse a memory-mapped float32 intensity matrix."""
-        cache_dir = self._make_dir(
-            os.path.join(self.work_dir, f"intensity_{self.data_signature}")
-        )
+        if self.batch_label:
+            cache_dir = self._make_dir(
+                os.path.join(self.work_dir, f"intensity_{self.batch_label}")
+            )
+        else:
+            cache_dir = self._make_dir(
+                os.path.join(self.work_dir, f"intensity_{self.data_signature}")
+            )
         mmap_path = os.path.join(cache_dir, "intensity_float.dat")
         meta_path = os.path.join(cache_dir, "intensity_metadata.pkl")
 
@@ -827,7 +867,11 @@ class ISFLevel3TwoStage:
         loss = self.loss
         candidate_rt = self.candidate_rt
 
-        for precursor_id in precursor_ids:
+        # 一次性读入本块所有 precursor 的强度行，避免循环内逐行读 memmap
+        chunk_precursor_data = bm[precursor_ids.astype(int), :].copy().astype(np.float64)
+        chunk_precursor_data[~np.isfinite(chunk_precursor_data)] = 0.0
+
+        for i, precursor_id in enumerate(precursor_ids):
             precursor_id = int(precursor_id)
             precursor_pos = int(position_in_order[precursor_id])
 
@@ -855,8 +899,7 @@ class ISFLevel3TwoStage:
 
             candidate_ids = order_rt[candidate_positions]
 
-            precursor_all = bm[precursor_id, :].copy().astype(np.float64)
-            precursor_all[~np.isfinite(precursor_all)] = 0.0
+            precursor_all = chunk_precursor_data[i, :]  # 内存索引，零 IO
             precursor_positive = precursor_all > 0
 
             if np.sum(precursor_positive) < self.min_copresent_files:
@@ -1694,9 +1737,14 @@ class ISFLevel3TwoStage:
         self.data_signature = self._data_signature()
         self.run_signature = self._run_signature()
 
-        self.run_dir = self._make_dir(
-            os.path.join(self.work_dir, f"run_{self.run_signature}")
-        )
+        if self.batch_label:
+            self.run_dir = self._make_dir(
+                os.path.join(self.work_dir, f"run_{self.batch_label}")
+            )
+        else:
+            self.run_dir = self._make_dir(
+                os.path.join(self.work_dir, f"run_{self.run_signature}")
+            )
 
         # Prefilter file IDs
         self._prefilter_file_ids = np.unique(
@@ -2006,6 +2054,7 @@ def ISFlevel3_two_stage(
     workers: int = 2,
     work_dir: Optional[str] = None,
     run_id: str = "default",
+    batch_label: str = "",
     rebuild_intensity_cache: bool = False,
     rebuild_candidates: bool = False,
     rebuild_stage1: bool = False,
@@ -2043,6 +2092,7 @@ def ISFlevel3_two_stage(
         workers=workers,
         work_dir=work_dir,
         run_id=run_id,
+        batch_label=batch_label,
         rebuild_intensity_cache=rebuild_intensity_cache,
         rebuild_candidates=rebuild_candidates,
         rebuild_stage1=rebuild_stage1,
