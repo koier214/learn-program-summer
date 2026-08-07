@@ -7,6 +7,8 @@ import sys
 import numpy as np
 import pandas as pd
 
+#pip install numpy pandas tqdm pyopenms
+
 # 把当前目录加到 path，确保能 import isf_level3
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -141,7 +143,7 @@ if __name__ == '__main__':
         candidate_rt=10.0,
 
         # 只有 2 个文件，降低要求
-        min_copresent_files=1,
+        min_copresent_files=3,
         stage1_files_per_pair=2,
         # ------------------------------------------------------------------
         # prefilter_cor（跨样品强度预筛选）—— 已注释，多文件批次时取消注释
@@ -181,11 +183,13 @@ if __name__ == '__main__':
 
         # 性能参数
         candidate_feature_chunk=500,
-        candidate_batch_size=2000,
-        stage2_pair_batch_size=1000,
+        # candidate_batch_size=2000,
+        # stage2_pair_batch_size=1000,
+        candidate_batch_size=5000,
+        stage2_pair_batch_size=5000,
         block_width=60,
         smooth_level=2,
-        workers=2,  # 2 个 mzML 同时处理
+        workers=10,  # 2 个 mzML 同时处理
 
         # 缓存
         work_dir=work_dir,
